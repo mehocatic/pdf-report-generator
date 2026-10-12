@@ -15,10 +15,27 @@ app.get("/health", (req, res) => {
 });
 
 app.post("/reports", async (req, res) => {
+	const force = req.body?.force === true;
+	const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+	if (!force) {
+		const existing = db
+			.prepare(
+				`SELECT * FROM reports WHERE date(created_at) = date('now') ORDER BY id DESC LIMIT 1`,
+			)
+			.get();
+
+		if (existing) {
+			return res.status(200).json({
+				id: existing.id,
+				file: `/reports/${existing.id}/file`,
+			});
+		}
+	}
+
 	const data = getReportData();
 	const now = new Date().toISOString();
 
-	// Insert a row first to get an id, then render using that id in the filename
 	const insert = db.prepare(
 		"INSERT INTO reports (path, created_at) VALUES (?, ?)",
 	);
@@ -33,22 +50,6 @@ app.post("/reports", async (req, res) => {
 	res.status(201).json({
 		id,
 		file: `/reports/${id}/file`,
-	});
-});
-
-app.get("/reports/:id", (req, res) => {
-	const row = db
-		.prepare("SELECT * FROM reports WHERE id = ?")
-		.get(req.params.id);
-
-	if (!row) {
-		return res.status(404).json({ error: "Report not found" });
-	}
-
-	res.json({
-		id: row.id,
-		created_at: row.created_at,
-		file: `/reports/${row.id}/file`,
 	});
 });
 
